@@ -19,8 +19,8 @@ const ADMIN_PASSWORD = 'admin888';
 
 // 3. Supabase 数据库连接配置
 // 获取方式：Supabase 控制台 -> Project Settings -> API -> Project URL & anon public key
-const SUPABASE_URL = 'https://your-project-id.supabase.co';
-const SUPABASE_ANON_KEY = 'your-supabase-anon-public-key';
+const SUPABASE_URL = 'https://mofceacdiedvpamfaqaz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_0o1ZCCH-zlU7IhplHAGxHg_KtCxv0-Q';
 
 // 4. 页面基础信息配置
 const SURVEY_META = {

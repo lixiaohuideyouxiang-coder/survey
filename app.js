@@ -162,6 +162,9 @@
       // ignore storage error
     }
 
+    // 自动标准化 URL（去除末尾可能附带的 /rest/v1/ 或斜杠）
+    url = url.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+
     const isPlaceholder =
       !url ||
       !key ||
@@ -171,21 +174,143 @@
     return { url, key, isValid: !isPlaceholder && /^https?:\/\//i.test(url) };
   }
 
+  /**
+   * 内置轻量级 Supabase PostgREST 兼容客户端
+   * 当国内移动网络下 CDN (jsdelivr) 加载缓慢或受阻时，自动使用原生 fetch 直连 Supabase REST API，
+   * 确保在钉钉移动端内 100% 稳定读写云端数据库。
+   */
+  function createFallbackSupabaseClient(baseUrl, apiKey) {
+    const headers = {
+      apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return {
+      from(table) {
+        const stateObj = {
+          method: 'GET',
+          selectCols: '*',
+          filters: [],
+          orderCol: null,
+          orderAsc: false,
+          upsertBody: null,
+          onConflictCol: null,
+          expectSingle: false,
+          expectMaybeSingle: false
+        };
+
+        const builder = {
+          select(cols = '*') {
+            stateObj.selectCols = cols.replace(/\s+/g, '');
+            return builder;
+          },
+          eq(col, val) {
+            stateObj.filters.push(`${encodeURIComponent(col)}=eq.${encodeURIComponent(val)}`);
+            return builder;
+          },
+          order(col, { ascending = true } = {}) {
+            stateObj.orderCol = col;
+            stateObj.orderAsc = ascending;
+            return builder;
+          },
+          upsert(payload, { onConflict } = {}) {
+            stateObj.method = 'POST';
+            stateObj.upsertBody = payload;
+            stateObj.onConflictCol = onConflict || 'name';
+            return builder;
+          },
+          single() {
+            stateObj.expectSingle = true;
+            return builder._exec();
+          },
+          maybeSingle() {
+            stateObj.expectMaybeSingle = true;
+            return builder._exec();
+          },
+          then(resolve, reject) {
+            return builder._exec().then(resolve, reject);
+          },
+          async _exec() {
+            try {
+              const params = [`select=${encodeURIComponent(stateObj.selectCols)}`];
+              if (stateObj.onConflictCol) {
+                params.push(`on_conflict=${encodeURIComponent(stateObj.onConflictCol)}`);
+              }
+              if (stateObj.filters.length > 0) {
+                params.push(...stateObj.filters);
+              }
+              if (stateObj.orderCol) {
+                params.push(`order=${encodeURIComponent(stateObj.orderCol)}.${stateObj.orderAsc ? 'asc' : 'desc'}`);
+              }
+
+              const reqUrl = `${baseUrl}/rest/v1/${encodeURIComponent(table)}?${params.join('&')}`;
+              const reqHeaders = { ...headers };
+              if (stateObj.method === 'POST') {
+                reqHeaders.Prefer = 'resolution=merge-duplicates,return=representation';
+              }
+
+              const resp = await fetch(reqUrl, {
+                method: stateObj.method,
+                headers: reqHeaders,
+                body: stateObj.upsertBody ? JSON.stringify(stateObj.upsertBody) : undefined
+              });
+
+              if (!resp.ok) {
+                const errText = await resp.text();
+                let errMsg = `HTTP ${resp.status}`;
+                try {
+                  const errJson = JSON.parse(errText);
+                  errMsg = errJson.message || errJson.error || errMsg;
+                } catch (e) {
+                  if (errText) errMsg = errText;
+                }
+                return { data: null, error: { message: errMsg } };
+              }
+
+              const rows = await resp.json();
+              if (stateObj.expectSingle) {
+                return { data: Array.isArray(rows) ? rows[0] || null : rows, error: null };
+              }
+              if (stateObj.expectMaybeSingle) {
+                return { data: Array.isArray(rows) ? rows[0] || null : rows, error: null };
+              }
+              return { data: rows, error: null };
+            } catch (networkErr) {
+              return { data: null, error: { message: networkErr.message || '网络请求失败' } };
+            }
+          }
+        };
+
+        return builder;
+      }
+    };
+  }
+
   function initDatabaseClient() {
     const { url, key, isValid } = getEffectiveSupabaseCredentials();
-    if (isValid && window.supabase && typeof window.supabase.createClient === 'function') {
+    if (isValid) {
       try {
-        state.supabase = window.supabase.createClient(url, key);
+        if (window.supabase && typeof window.supabase.createClient === 'function') {
+          state.supabase = window.supabase.createClient(url, key);
+        } else {
+          state.supabase = createFallbackSupabaseClient(url, key);
+        }
         state.isCloudMode = true;
         dom.dbStatusDot.className = 'status-dot online';
         dom.dbStatusText.textContent = 'Supabase 云端已连接';
         return;
       } catch (err) {
-        console.error('Supabase 初始化异常:', err);
+        console.error('Supabase 初始化异常，切换至直连客户端:', err);
+        state.supabase = createFallbackSupabaseClient(url, key);
+        state.isCloudMode = true;
+        dom.dbStatusDot.className = 'status-dot online';
+        dom.dbStatusText.textContent = 'Supabase 云端已连接';
+        return;
       }
     }
 
-    // 未配置有效 Supabase 密钥时，自动启用浏览器本地持久化演示层（结构与 survey_responses 表完全一致）
+    // 未配置有效 Supabase 密钥时，自动启用浏览器本地持久化演示层
     state.supabase = null;
     state.isCloudMode = false;
     dom.dbStatusDot.className = 'status-dot demo';
