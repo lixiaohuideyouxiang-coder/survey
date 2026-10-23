@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="format-detection" content="telephone=no, email=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>区域网管工作经验调研问卷</title>
+  <link rel="stylesheet" href="./style.css" />
+  <!-- 引入 Supabase 官方 JS 客户端 (CDN 主备源) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <!-- 顶部钉钉风格导航与横幅 -->
+  <header class="dd-header">
+    <div class="dd-header-inner">
+      <div class="dd-brand-row">
+        <span class="dd-badge">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="header-dept">区域网络运维管理中心</span>
+        </span>
+        <!-- 数据库连接状态指示器 -->
+        <button type="button" id="btn-db-status" class="db-status-pill" title="点击查看或配置 Supabase 连接">
+          <span class="status-dot" id="db-status-dot"></span>
+          <span id="db-status-text">正在连接...</span>
+        </button>
+      </div>
+
+      <h1 class="dd-title" id="header-title">区域网管工作经验调研问卷</h1>
+      <p class="dd-subtitle" id="header-subtitle">请如实填写您的姓名与处理经验，支持随时按姓名查询并修改已提交的回答。</p>
+
+      <!-- 顶部视图切换标签栏（支持直接点击切换或访问 #/admin） -->
+      <nav class="dd-tabs" role="tablist" aria-label="页面导航">
+        <a href="#/" id="tab-survey" class="dd-tab active" role="tab" aria-selected="true">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>问卷填写</span>
+        </a>
+        <a href="#/admin" id="tab-admin" class="dd-tab" role="tab" aria-selected="false">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>管理后台</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 主体内容区 -->
+  <main class="dd-main">
+    <!-- ==================== 视图 1：问卷填写页面 ==================== -->
+    <section id="view-survey" class="view-section active" aria-labelledby="tab-survey">
+      <form id="survey-form" novalidate>
+        <!-- 填写人姓名卡片 -->
+        <div class="dd-card">
+          <div class="card-header">
+            <span class="section-indicator"></span>
+            <h2 class="card-title">基本信息</h2>
+            <span class="card-extra-hint">仅凭姓名即可找回并修改记录</span>
+          </div>
+
+          <div class="form-group">
+            <label for="respondent-name" class="form-label">
+              您的姓名 <span class="required-star">*</span>
+            </label>
+            <div class="name-input-group">
+              <div class="input-wrapper">
+                <input
+                  type="text"
+                  id="respondent-name"
+                  name="name"
+                  class="dd-input"
+                  placeholder="请输入您的真实姓名（必填）"
+                  maxlength="40"
+                  autocomplete="name"
+                  required
+                />
+                <button type="button" id="btn-clear-name" class="btn-input-clear hidden" aria-label="清空姓名" title="切换其他姓名">
+                  ✕
+                </button>
+              </div>
+              <button type="button" id="btn-query-record" class="dd-btn dd-btn-outline">
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span id="btn-query-text">查询已填记录</span>
+              </button>
+            </div>
+
+            <p class="field-helper">
+              系统会将您的姓名保存在本机浏览器中，再次打开链接自动回显历史回答。
+            </p>
+
+            <!-- 历史记录匹配状态提示横幅 -->
+            <div id="history-banner" class="history-banner hidden" role="status" aria-live="polite">
+              <div class="history-banner-icon" id="history-banner-icon">✓</div>
+              <div class="history-banner-body">
+                <div class="history-banner-title" id="history-banner-title">
+                  已加载您之前的回答，可直接修改并覆盖保存
+                </div>
+                <div class="history-banner-meta" id="history-banner-meta"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 动态渲染的简答题列表容器（数据来自 QUESTIONS 常量） -->
+        <div id="questions-container"></div>
+
+        <!-- 底部提交栏 -->
+        <div class="submit-bar">
+          <button type="submit" id="btn-submit" class="dd-btn dd-btn-primary dd-btn-block">
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span id="btn-submit-text">提交问卷</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- 提交成功反馈面板（提交后展示，支持继续修改） -->
+      <div id="submit-success-card" class="dd-card success-panel hidden">
+        <div class="success-icon-wrap">
+          <svg class="success-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3 class="success-title" id="success-title">提交成功！</h3>
+        <p class="success-desc" id="success-desc">感谢您的认真填写，您的回答已安全保存。</p>
+        <div class="success-meta-box" id="success-meta-box"></div>
+        <div class="success-actions">
+          <button type="button" id="btn-continue-edit" class="dd-btn dd-btn-outline">
+            继续修改我的回答
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 视图 2：管理员后台页面 (#/admin) ==================== -->
+    <section id="view-admin" class="view-section hidden" aria-labelledby="tab-admin">
+      <!-- 2.1 密码验证锁屏卡片 -->
+      <div id="admin-auth-card" class="dd-card auth-card">
+        <div class="auth-icon-circle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2 class="auth-title">管理员后台验证</h2>
+        <p class="auth-subtitle">请输入管理员访问密码以查看统计数据及导出报表</p>
+
+        <form id="admin-login-form" class="auth-form" novalidate>
+          <div class="password-input-wrap">
+            <input
+              type="password"
+              id="admin-password-input"
+              class="dd-input"
+              placeholder="请输入管理员密码"
+              autocomplete="current-password"
+              required
+            />
+            <button type="button" id="btn-toggle-pwd" class="btn-pwd-toggle" aria-label="显示或隐藏密码">
+              显示
+            </button>
+          </div>
+          <p id="admin-auth-error" class="auth-error hidden">密码不正确，请重新输入</p>
+          <button type="submit" class="dd-btn dd-btn-primary dd-btn-block">
+            解锁进入后台
+          </button>
+        </form>
+      </div>
+
+      <!-- 2.2 解锁后的管理后台主面板 -->
+      <div id="admin-dashboard" class="hidden">
+        <!-- 顶部管理操作条 -->
+        <div class="admin-top-bar">
+          <div class="admin-top-left">
+            <span class="admin-status-badge">● 已解锁管理权限</span>
+            <span id="admin-last-sync" class="admin-sync-time"></span>
+          </div>
+          <div class="admin-top-actions">
+            <button type="button" id="btn-refresh-admin" class="dd-btn dd-btn-sm dd-btn-light">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>刷新数据</span>
+            </button>
+            <button type="button" id="btn-lock-admin" class="dd-btn dd-btn-sm dd-btn-ghost">
+              退出锁定
+            </button>
+          </div>
+        </div>
+
+        <!-- 统计卡片区（已提交总人数、二次修改人数、平均回答字数） -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">已提交总人数</div>
+            <div class="stat-value-row">
+              <span class="stat-value" id="stat-total-count">0</span>
+              <span class="stat-unit">人</span>
+            </div>
+            <div class="stat-foot" id="stat-total-foot">实时汇总人数</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">二次修改人数</div>
+            <div class="stat-value-row">
+              <span class="stat-value stat-value-accent" id="stat-modified-count">0</span>
+              <span class="stat-unit">人</span>
+            </div>
+            <div class="stat-foot" id="stat-modified-foot">占比 0%</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">平均回答字数</div>
+            <div class="stat-value-row">
+              <span class="stat-value stat-value-success" id="stat-avg-words">0</span>
+              <span class="stat-unit">字</span>
+            </div>
+            <div class="stat-foot" id="stat-words-foot">最长 0 字</div>
+          </div>
+        </div>
+
+        <!-- 搜索过滤、排序与导出控制栏 -->
+        <div class="dd-card admin-toolbar-card">
+          <div class="toolbar-row">
+            <!-- 按姓名或回答关键词实时搜索 -->
+            <div class="search-box">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <input
+                type="search"
+                id="admin-search-input"
+                class="dd-input search-input"
+                placeholder="搜索姓名或回答内容关键词..."
+              />
+              <button type="button" id="btn-clear-search" class="btn-input-clear hidden" aria-label="清除搜索">
+                ✕
+              </button>
+            </div>
+
+            <!-- 排序与一键导出按钮 -->
+            <div class="toolbar-actions">
+              <div class="sort-wrap">
+                <label for="admin-sort-select" class="sr-only">排序方式</label>
+                <select id="admin-sort-select" class="dd-select">
+                  <option value="updated_desc">最后修改时间：最新优先</option>
+                  <option value="updated_asc">最后修改时间：最早优先</option>
+                  <option value="created_desc">首次提交时间：最新优先</option>
+                  <option value="created_asc">首次提交时间：最早优先</option>
+                  <option value="words_desc">回答字数：由多到少</option>
+                </select>
+              </div>
+
+              <button type="button" id="btn-export-csv" class="dd-btn dd-btn-export">
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>一键导出 Excel/CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-summary-row">
+            <span id="admin-list-summary">共 0 条记录</span>
+            <span class="current-question-preview" id="admin-question-preview"></span>
+          </div>
+        </div>
+
+        <!-- 回答记录列表容器 -->
+        <div id="admin-response-list" class="response-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Supabase 在线连接配置弹窗（方便在未修改 config.js 时直接填入测试，或查看配置说明） -->
+  <div id="config-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="config-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="config-modal-title" class="modal-title">数据库连接状态与配置</h3>
+        <button type="button" id="btn-close-modal" class="modal-close" aria-label="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="config-mode-notice" class="mode-notice"></div>
+        <div class="form-group">
+          <label for="cfg-supabase-url" class="form-label">Supabase Project URL</label>
+          <input type="url" id="cfg-supabase-url" class="dd-input" placeholder="https://xxxx.supabase.co" />
+        </div>
+        <div class="form-group">
+          <label for="cfg-supabase-key" class="form-label">Supabase Anon Public Key</label>
+          <input type="text" id="cfg-supabase-key" class="dd-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." />
+        </div>
+        <p class="field-helper">
+          提示：正式部署 Vercel 时，建议直接在 <code>config.js</code> 中修改 <code>SUPABASE_URL</code> 与 <code>SUPABASE_ANON_KEY</code> 常量；您也可以在此处临时填入并保存在当前浏览器中立即连接云端数据库。
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-reset-config" class="dd-btn dd-btn-ghost">恢复默认配置</button>
+        <button type="button" id="btn-save-config" class="dd-btn dd-btn-primary">保存并重新连接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 轻提示 Toast 容器 -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <footer class="dd-footer">
+    <p>适配钉钉移动端浏览器 · 支持按姓名自动回显与覆盖更新</p>
+  </footer>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
