@@ -244,17 +244,41 @@
                 params.push(`order=${encodeURIComponent(stateObj.orderCol)}.${stateObj.orderAsc ? 'asc' : 'desc'}`);
               }
 
-              const reqUrl = `${baseUrl}/rest/v1/${encodeURIComponent(table)}?${params.join('&')}`;
+              const queryStr = `${encodeURIComponent(table)}?${params.join('&')}`;
               const reqHeaders = { ...headers };
               if (stateObj.method === 'POST') {
                 reqHeaders.Prefer = 'resolution=merge-duplicates,return=representation';
               }
 
-              const resp = await fetch(reqUrl, {
-                method: stateObj.method,
-                headers: reqHeaders,
-                body: stateObj.upsertBody ? JSON.stringify(stateObj.upsertBody) : undefined
-              });
+              // 优先走同源反向代理 (/rest/v1/...) 以解决国内网络直连 Supabase 慢或受阻问题，失败时自动回退直连
+              const isHttpOrigin = /^https?:\/\//i.test(window.location.origin) && !/localhost|127\.0\.0\.1/i.test(window.location.origin);
+              const candidateUrls = isHttpOrigin
+                ? [`${window.location.origin}/rest/v1/${queryStr}`, `${baseUrl}/rest/v1/${queryStr}`]
+                : [`${baseUrl}/rest/v1/${queryStr}`];
+
+              let resp = null;
+              let lastErr = null;
+              for (const reqUrl of candidateUrls) {
+                try {
+                  const r = await fetch(reqUrl, {
+                    method: stateObj.method,
+                    headers: reqHeaders,
+                    body: stateObj.upsertBody ? JSON.stringify(stateObj.upsertBody) : undefined
+                  });
+                  // 如果同源没有配置反向代理返回 404/405 HTML，则回退直连 Supabase
+                  const contentType = r.headers.get('content-type') || '';
+                  if ((r.status === 404 || r.status === 405) && contentType.includes('text/html') && candidateUrls.length > 1 && reqUrl === candidateUrls[0]) {
+                    continue;
+                  }
+                  resp = r;
+                  break;
+                } catch (e) {
+                  lastErr = e;
+                }
+              }
+              if (!resp) {
+                throw lastErr || new Error('网络请求失败');
+              }
 
               if (!resp.ok) {
                 const errText = await resp.text();
