@@ -250,9 +250,11 @@
                 reqHeaders.Prefer = 'resolution=merge-duplicates,return=representation';
               }
 
-              // 优先走同源反向代理 (/rest/v1/...) 以解决国内网络直连 Supabase 慢或受阻问题，失败时自动回退直连
-              const isHttpOrigin = /^https?:\/\//i.test(window.location.origin) && !/localhost|127\.0\.0\.1/i.test(window.location.origin);
-              const candidateUrls = isHttpOrigin
+              // 仅在支持反向代理的托管环境才尝试同源 /rest/v1/，GitHub Pages / Surge 直接走 Supabase 云端接口
+              const isProxyCapableHost =
+                /^https?:\/\//i.test(window.location.origin) &&
+                !/localhost|127\.0\.0\.1|\.github\.io$|\.surge\.sh$/i.test(window.location.hostname);
+              const candidateUrls = isProxyCapableHost
                 ? [`${window.location.origin}/rest/v1/${queryStr}`, `${baseUrl}/rest/v1/${queryStr}`]
                 : [`${baseUrl}/rest/v1/${queryStr}`];
 
